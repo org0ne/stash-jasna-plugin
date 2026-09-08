@@ -11,9 +11,11 @@
 //   seekTo      seconds to seek to before clicking (play modes only)
 //   cycle       after ON succeeds: click OFF, verify position restore, click ON again
 //
-// Prereqs: Jasna running (`jasna --stream`), tools/https-proxy/proxy.py
-// running, plugin symlinked into Stash and reloaded. Run
-// `curl -sk -X POST https://192.168.11.113:8766/stop` first for a cold start.
+// Env: STASH_URL (default http://localhost:9999), JASNA_URL (host/origin
+// of the Jasna server, used only to filter network log lines).
+// Prereqs: Jasna running (`jasna --stream`), the plugin installed in Stash
+// with its Jasna URL setting configured. POST <jasna>/stop first for a
+// cold-start measurement.
 // Instruments player.error()/src()/load() with stack traces and logs raw
 // <video> events so a Stash-side source swap is visible if it happens.
 const { spawn } = require("child_process");
@@ -23,6 +25,11 @@ const sceneId = process.argv[2] || "34503";
 const pollSeconds = Number(process.argv[3] || 15);
 const preMode = process.argv[4] || "fresh"; // fresh | play | play-pause
 const seekTo = Number(process.argv[5] || 0);
+// Stash base URL (scene pages are loaded from here) and the Jasna URL used
+// only for filtering network log noise; the plugin itself reads its Jasna
+// URL from the Stash plugin setting.
+const STASH_URL = (process.env.STASH_URL || "http://localhost:9999").replace(/\/+$/, "");
+const JASNA_HOST_PATTERN = new RegExp((process.env.JASNA_URL || "192.168.11.113").replace(/^https?:\/\//, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 const PORT = 9333;
 const profile = __dirname + "/chrome-profile-" + process.pid;
 
@@ -61,7 +68,7 @@ async function main() {
       console.log(`${ts()} EXCEPTION: ${m.params.exceptionDetails.text} ${(m.params.exceptionDetails.exception || {}).description || ""}`.slice(0, 500));
     } else if (m.method === "Network.requestWillBeSent") {
       reqUrls.set(m.params.requestId, m.params.request.url);
-      const u = m.params.request.url; if (/8766/.test(u)) console.log(`${ts()} net.request ${u.replace(/\?.*/, "")}`);
+      const u = m.params.request.url; if (JASNA_HOST_PATTERN.test(u)) console.log(`${ts()} net.request ${u.replace(/\?.*/, "")}`);
     } else if (m.method === "Network.loadingFailed") {
       const u = reqUrls.get(m.params.requestId) || "?"; console.log(`${ts()} net.FAILED ${m.params.errorText} ${u.replace(/apikey=[^&]+/, "apikey=..").slice(0, 160)}`);
     } else if (m.method === "Log.entryAdded") {
@@ -77,7 +84,7 @@ async function main() {
 
   for (const d of ["Runtime", "Log", "Network", "Page"]) await send(d + ".enable");
   console.log(`${ts()} navigating to scene ${sceneId}`);
-  await send("Page.navigate", { url: `https://jav.noisekitchen.net/scenes/${sceneId}` });
+  await send("Page.navigate", { url: `${STASH_URL}/scenes/${sceneId}` });
 
   // wait for plugin button to be mounted and enabled
   let ready = false;

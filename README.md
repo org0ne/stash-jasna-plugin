@@ -85,10 +85,15 @@ reporting readyState, position, and any Stash-side source swap. Needs
 `google-chrome` and Node 20+:
 
 ```sh
-node --experimental-websocket tools/headless-test/repro.js 34503 20 play 600 cycle
+STASH_URL=http://localhost:9999 JASNA_URL=http://192.168.1.50:8765 \
+  node --experimental-websocket tools/headless-test/repro.js 34503 20 play 600 cycle
 ```
 
-Edit the Stash/Jasna URLs at the top of the script for your setup.
+`STASH_URL` is where scene pages are loaded from; `JASNA_URL` only filters
+the network log output. Arguments: scene id, poll seconds, `fresh` |
+`play` | `play-pause`, seek target in seconds, and `cycle` to run
+ON -> OFF -> ON. Chrome is started with `--ignore-certificate-errors`, so a
+self-signed proxy cert is fine.
 
 ## Known limitations (PoC)
 
